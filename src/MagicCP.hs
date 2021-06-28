@@ -98,19 +98,19 @@ solveWithAllParsers
   -> IO (Maybe Exp)
 solveWithAllParsers wOps wAbs wOC cfg lib pId = do
   let l =
-        -- [  solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
-        --     (undefined :: Int -> Int -> Int -> String)) pId
-        -- , solveWithLimits (solvev0 wOps wAbs wOC WithTestCases cfg lib
-        --     (undefined :: Int -> Int -> Int -> Int -> Int)) pId
-        -- , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
-        --     (undefined :: Int -> Int -> Int)) pId
-        -- , solveWithLimits (solvev0 wOps wAbs wOC WithTestCases cfg lib
-        --     (undefined :: Int -> Int -> String)) pId
-        -- , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
-        --     (undefined :: [Int] -> String)) pId
-        -- , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
-        --     (undefined :: Int -> [Int] -> String)) pId
         [ solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
+            (undefined :: Int -> Int -> Int -> String)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithTestCases cfg lib
+            (undefined :: Int -> Int -> Int -> Int -> Int)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
+            (undefined :: Int -> Int -> Int)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithTestCases cfg lib
+            (undefined :: Int -> Int -> String)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
+            (undefined :: [Int] -> String)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
+            (undefined :: Int -> [Int] -> String)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
             (undefined :: Int -> String)) pId
         , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
             (undefined :: String -> String)) pId
@@ -143,7 +143,9 @@ solveWithLimits solve pId = do
     memusage <- Memory.getMemoUsage
     Control.Monad.when (tout `mod` 300 == 0) $ putStrLn $ "checking limits: " ++ show tout ++ "  " ++ show memusage
     if memusage > memLimit || tout < 0
-       then Control.Concurrent.killThread tid
+       then do
+         putStrLn "Timed out!!"
+         Control.Concurrent.killThread tid
        else do
         Control.Concurrent.threadDelay 5000000
         checkLimits tid (tout - 5) memLimit
@@ -209,10 +211,8 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
     f cfg mpto pred ((e, a):ts) = do
       ECnt.cntExp
       es <- ECnt.getTotalExps
-      putStrLn $ "Number of expressions tried " <> show es
-      putStrLn $ "Generated expression " <> show e
-      putStrLn $ "Parser used " <> ParseInputOutput.parserNameNOTC a
-      Control.Monad.when (es `mod` 1000 == 0) $ putStrLn (pprintUC e)
+      putStrLn $ "Expression #" <> show es
+      putStrLn $ "Generated expression " <> pprintUC e
       result <- TimeOut.maybeWithTO2 mpto (pred a)
       case result of
         Just True -> do
@@ -240,10 +240,11 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
                   putStrLn $ "sumbission #" <> show subm <> " failed with: " <>
                     drop 2 (dropWhile (/= ':') msg)
 
-                  mtc <- CFHTML.getLastTestCase2 cfg cId subm
+                  mtc <- CFHTML.getLastTestCase cfg cId subm
                   case mtc of
                     Just io -> do
                       putStrLn "Got new test case"
+                      print io
                       Timer.start
                       f cfg mpto (Maybe.fromJust $ ParseInputOutput.extendPredicate wTC 0 pred io) ts
                     Nothing -> do
@@ -254,9 +255,11 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
               putStrLn "Failed Sample Tests"
               Timer.start
               f cfg mpto pred ts
-        Just False ->
+        Just False -> do
+          putStrLn "Failed"
           f cfg mpto pred ts
-        Nothing ->
+        Nothing -> do
+          putStrLn "Timed out"
           f cfg mpto pred ts
     fromJust' (Just x) = x
     fromJust' _ = error $ "Wrong parser: " ++ ParseInputOutput.parserName hoge wTC
