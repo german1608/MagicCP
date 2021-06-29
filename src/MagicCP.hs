@@ -114,6 +114,8 @@ solveWithAllParsers wOps wAbs wOC cfg lib pId = do
             (undefined :: Int -> String)) pId
         , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
             (undefined :: String -> String)) pId
+        , solveWithLimits (solvev0 wOps wAbs wOC WithoutTestCases cfg lib
+            (undefined :: [String] -> String)) pId
         ]
   solveUntilJust l
   where
@@ -171,7 +173,7 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
               WithOutputConstants ->
                 getConstantPrimitives (LibTH.typeOf hoge) (concatMap (words . snd) ios)
               WithoutOutputConstants -> []
-      (md :: ProgGen, prims) = if wOps == WithOptimizations
+      (md :: ProgGenSF, prims) = if wOps == WithOptimizations
       --(md :: ProgGen, prims) = if wOps == WithOptimizations
               then let (md', lst) = LibTH.mkPGWithDefaultsOpts $
                         customLibrary ++ zip custom (repeat [])

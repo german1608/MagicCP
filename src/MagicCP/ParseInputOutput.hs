@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE ViewPatterns        #-}
 module MagicCP.ParseInputOutput where
 
 import Language.Haskell.TH (DecsQ)
@@ -60,6 +61,8 @@ $(ParserDefinitions.parseFourIntsDec)
 
 $(ParserDefinitions.parseIntListWithSizeDec)
 $(ParserDefinitions.parseIntListIgnoreSizeDec)
+
+$(ParserDefinitions.parseStringsWithoutSizeDec)
 
 instance ParseInputOutput (Int -> [Int] -> String) where
   getSinglePredicateNOTC 0 (i, o) = do
@@ -203,6 +206,17 @@ instance ParseInputOutput (Int -> Int -> Int -> Int -> Int) where
                                              ]
   parserNameNOTC _ = "Four Ints to Int"
 
+instance ParseInputOutput ([String] -> String) where
+  getSinglePredicateNOTC 0 (parseStringsWithoutSize -> Just i, o) =
+    return $ \f -> f i == o
+
+  getSinglePredicateNOTC i _ =
+    error $ mkParserNotImplMsg i "[String] -> String"
+
+  parserDeclarations _ = concat <$> sequence
+    [ ParserDefinitions.parseStringsWithoutSizeDec ]
+
+  parserNameNOTC _ = "List of String to String"
 
 mkParserNotImplMsg :: Parser -> String -> String
 mkParserNotImplMsg p s =
