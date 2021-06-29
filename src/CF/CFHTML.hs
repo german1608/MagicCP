@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 module CF.CFHTML( getTestCases ) where
 
 import CF.CFConfig           (CFConfig (..))

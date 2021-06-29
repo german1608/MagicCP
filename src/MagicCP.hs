@@ -22,6 +22,7 @@ import MagicHaskeller.LibTH
     , Ppr
     , Primitive
     , PrimitiveWithOpt
+    , ProgGen
     , ProgGenSF
     , Type (..)
     , TypeRep
@@ -151,7 +152,6 @@ solveWithLimits solve pId = do
         checkLimits tid (tout - 5) memLimit
 
 
--- solvev0 (undefined :: (Int -> [Int] -> String)) (1030, 'a')
 solvev0
   :: forall b . (Typeable b, ParseInputOutput b)
   => WithOptimizations
@@ -167,12 +167,12 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
   putStrLn $ "Parsing problem using " <> ParseInputOutput.parserNameNOTC hoge
   ios <- CFToolWrapper.getInputOutput cfg pId
   print ios
-  let pred = fromJust' (ParseInputOutput.getPredicate wTC 0 ios :: Maybe (b -> Bool))
+  let initialPred = makePred ios
       custom = case wOC of
               WithOutputConstants ->
                 getConstantPrimitives (LibTH.typeOf hoge) (concatMap (words . snd) ios)
               WithoutOutputConstants -> []
-      (md :: ProgGenSF, prims) = if wOps == WithOptimizations
+      (md :: ProgGen, prims) = if wOps == WithOptimizations
       --(md :: ProgGen, prims) = if wOps == WithOptimizations
               then let (md', lst) = LibTH.mkPGWithDefaultsOpts $
                         customLibrary ++ zip custom (repeat [])
@@ -181,7 +181,7 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
               else let (md', lst) = LibTH.mkPGWithDefaults $
                         map fst customLibrary ++ custom
                     in (md', concatMap (\prim -> pprintUC prim ++ "\n") lst)
-  pred `seq` return ()
+  initialPred `seq` return ()
 
   Logger.newLogger (log_root cfg) pId wOps wAbs
   Logger.logParser hoge wTC
@@ -200,15 +200,16 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
   --let et = everythingF md (wAbs == WithAbsents)
   let et = LibTH.everything md (wAbs == WithAbsents)
       mpto = LibTH.timeout $ ProgramGenerator.opt $ ProgramGenerator.extractCommon md
-  f cfg mpto pred (concat et)
+  f mpto initialPred (concat et)
   where
-    f :: (ParseInputOutput a)
-      => CFConfig
-      -> Maybe Int
-      -> (a -> Bool)
-      -> [(Exp, a)]
+    makePred :: [(String, String)] -> b -> Bool
+    makePred inputOutputs = fromJust' (ParseInputOutput.getPredicate wTC 0 inputOutputs :: Maybe (b -> Bool))
+
+    f :: Maybe Int
+      -> (b -> Bool)
+      -> [(Exp, b)]
       -> IO Exp
-    f cfg mpto pred ((e, a):ts) = do
+    f mpto pred ((e, a):ts) = do
       ECnt.cntExp
       es <- ECnt.getTotalExps
       putStrLn $ "Expression #" <> show es
@@ -240,27 +241,21 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
                   putStrLn $ "sumbission #" <> show subm <> " failed with: " <>
                     drop 2 (dropWhile (/= ':') msg)
 
-                  mtc <- CFHTML.getLastTestCase cfg cId subm
-                  case mtc of
-                    Just io -> do
-                      putStrLn "Got new test case"
-                      print io
-                      Timer.start
-                      f cfg mpto (Maybe.fromJust $ ParseInputOutput.extendPredicate wTC 0 pred io) ts
-                    Nothing -> do
-                      putStrLn "Couldn't get new test case"
-                      Timer.start
-                      f cfg mpto pred ts
+                  newTestCases <- Maybe.catMaybes <$> CFHTML.getTestCases cfg cId subm
+                  putStrLn $ "Got " <> show (length newTestCases) <> " new test cases"
+                  print newTestCases
+                  Timer.start
+                  f mpto (makePred newTestCases) ts
             Rejected{} -> do
               putStrLn "Failed Sample Tests"
               Timer.start
-              f cfg mpto pred ts
+              f mpto pred ts
         Just False -> do
           putStrLn "Failed"
-          f cfg mpto pred ts
+          f mpto pred ts
         Nothing -> do
           putStrLn "Timed out"
-          f cfg mpto pred ts
+          f mpto pred ts
     fromJust' (Just x) = x
     fromJust' _ = error $ "Wrong parser: " ++ ParseInputOutput.parserName hoge wTC
 
