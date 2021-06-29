@@ -28,7 +28,6 @@ import MagicHaskeller.LibTH
     , TypeRep
     , Typeable
     )
-import Prelude                  hiding (pred)
 import System.FilePath.Posix    ((</>))
 import Unsafe.Coerce            (unsafeCoerce)
 
@@ -209,12 +208,12 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
       -> (b -> Bool)
       -> [(Exp, b)]
       -> IO Exp
-    f mpto pred ((e, a):ts) = do
+    f mpto predicate ((e, a):ts) = do
       ECnt.cntExp
       es <- ECnt.getTotalExps
       putStrLn $ "Expression #" <> show es
       putStrLn $ "Generated expression " <> pprintUC e
-      result <- TimeOut.maybeWithTO2 mpto (pred a)
+      result <- TimeOut.maybeWithTO2 mpto (predicate a)
       case result of
         Just True -> do
           putStrLn "found solution to predicate"
@@ -249,13 +248,13 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
             Rejected{} -> do
               putStrLn "Failed Sample Tests"
               Timer.start
-              f mpto pred ts
+              f mpto predicate ts
         Just False -> do
           putStrLn "Failed"
-          f mpto pred ts
+          f mpto predicate ts
         Nothing -> do
           putStrLn "Timed out"
-          f mpto pred ts
+          f mpto predicate ts
     fromJust' (Just x) = x
     fromJust' _ = error $ "Wrong parser: " ++ ParseInputOutput.parserName hoge wTC
 
