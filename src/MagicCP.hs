@@ -130,27 +130,31 @@ solveWithAllParsers wOps wAbs wOC cfg lib pId = do
 solveWithLimits :: (ProblemId -> IO Exp) -> ProblemId -> IO (Maybe Exp)
 solveWithLimits solve pId = do
   tid <- Control.Concurrent.myThreadId
-  let timeout = 60*30
-      memoPerc = 80
   Control.Exception.bracket
-    ( Control.Concurrent.forkIO $ checkLimits tid timeout memoPerc )
+    ( Control.Concurrent.forkIO $ checkLimits tid timeout )
     Control.Concurrent.killThread
     ( \_ -> Just <$> solve pId )
     --`catch` \(ErrorCall _) -> do
     `catch` \(SomeException _) ->
       return Nothing
   where
-  checkLimits :: ThreadId -> Int -> Float -> IO ()
-  checkLimits tid tout memLimit = do
+  timeout = 60 * 30
+  memLimit = 80
+  sleep = 5 * 1000 * 1000
+
+  checkLimits :: ThreadId -> Int -> IO ()
+  checkLimits tid tout = do
     memusage <- Memory.getMemoUsage
     Control.Monad.when (tout `mod` 300 == 0) $ putStrLn $ "checking limits: " ++ show tout ++ "  " ++ show memusage
     if memusage > memLimit || tout < 0
        then do
          putStrLn "Timed out!!"
+         putStrLn $ "Memory usage: " <> show memusage
+         putStrLn $ "Remaining seconds: " <> show tout
          Control.Concurrent.killThread tid
        else do
-        Control.Concurrent.threadDelay 5000000
-        checkLimits tid (tout - 5) memLimit
+        Control.Concurrent.threadDelay sleep
+        checkLimits tid (tout - 5)
 
 
 solvev0
@@ -174,7 +178,7 @@ solvev0 wOps wAbs wOC wTC cfg customLibrary hoge pId@(cId, _) = do
                 getConstantPrimitives (LibTH.typeOf hoge) (concatMap (words . snd) ios)
               WithoutOutputConstants -> []
       (md :: ProgGenSF, prims) = if wOps == WithOptimizations
-      --(md :: ProgGen, prims) = if wOps == WithOptimizations
+      -- (md :: ProgGen, prims) = if wOps == WithOptimizations
               then let (md', lst) = LibTH.mkPGWithDefaultsOpts $
                         customLibrary ++ zip custom (repeat [])
                     in (md', concatMap (\(prim, ops) ->
